@@ -420,13 +420,13 @@ let s0params = {
     p5.textAlign(p5.CENTER)
     p5.noStroke()
     p5.fill(70)
-    p5.text("Imagine each square represents a prognosis result for a cancer patient.", p5.width/2, 45);
+    p5.text("Imagine each square represents a prognosis result for a patient with a tumor.", p5.width/2, 45);
     p5.text("Click to adjust the recommendation.", p5.width/2, 45 + LINESIZE)
     let stats = getStats(sp.people);
     let base = 220
-    p5.text("" + stats.nLabeled + " of these patients have been labeled with a mild prognosis...", p5.width/2, base + LINESIZE)
+    p5.text("" + stats.nLabeled + " of these tumors have been labeled as malignant...", p5.width/2, base + LINESIZE)
     if (sp.actionButton.isClicked) {
-      p5.text(stats.tp + " of those patients went on to beat cancer (" + (stats.accuracy * 100).toFixed(0) + "% accuracy)", p5.width/2, base + LINESIZE * 2)
+      p5.text(stats.tp + " of those tumors developed into cancer (" + (stats.accuracy * 100).toFixed(0) + "% accuracy)", p5.width/2, base + LINESIZE * 2)
     }
     p5.pop();
   }
@@ -477,9 +477,9 @@ let drawTable = function(p5, sp, p) {
     }
   }
   for(let i = 0; i < p.table.length; i+=2) {
+    let yCenter = p.base + p.interval * i + (Math.floor(i / 2) * p.interval * 0.5);
     for(let j = 0; j < sp.n_groups; j++) {
       let xLeft = sp.offsetL + j * sp.group_w;
-      let yCenter = p.base + p.interval * i + (Math.floor(i / 2) * p.interval * 0.5);
       p5.push()
       p5.textSize(25)
       p5.textAlign(p5.RIGHT, p5.CENTER)
@@ -490,6 +490,20 @@ let drawTable = function(p5, sp, p) {
       )
       p5.pop()
     }
+    // lazy hardcoding
+    let diff = Math.abs(p.table[i].getValue(stats, 0) / p.table[i + 1].getValue(stats,0) -
+      p.table[i].getValue(stats, 1) / p.table[i + 1].getValue(stats,1))
+    let text = 'Unfair!'
+    if (diff < 0.001) {
+      text = 'Perfect balance!'
+    } else if (diff < 0.01) {
+      text = 'Awesome!'
+    } else if (diff < 0.02) {
+      text = 'Great!'
+    } else if (diff < 0.05) {
+      text = 'Close...'
+    }
+    p5.text(text, sp.offsetL + 2 * sp.group_w, yCenter + 0.5  *p.interval)
   }
   p5.pop();
 
@@ -549,7 +563,6 @@ let template = function(p) {
       p5.text(p.title, p5.width/2, 25)
       p5.pop()
 
-
       drawPeople(p5, sp, p.table, sp.highlightBox);
       p.drawCb(sp, p5)
       sp.resetButton.draw();
@@ -591,6 +604,12 @@ let template = function(p) {
 
     p5.mousePressed = function() {
       drag = true;
+      // prevent clicks from highlighting text on the page
+      if (p5.mouseX > 0 && p5.mouseX < p5.width) {
+        if (p5.mouseY > 0 && p5.mouseY < p5.height) {
+          return false;
+        }
+      }
     }
 
     p5.mouseReleased = function() {
@@ -683,7 +702,7 @@ let s1params = {
     p5.noStroke()
     p5.fill(70)
     let stats = getStats(sp.people)
-    p5.text((stats.accuracy * 100).toFixed(0) + "% of the candidates called back for an interview are qualified", p5.width/2, 45)
+    p5.text((stats.accuracy * 100).toFixed(0) + "% of the candidates called back for an interview are qualified.", p5.width/2, 45)
     p5.pop()
     if (sp.actionButton.isClicked) {
       drawTable(p5, sp, this);
@@ -881,7 +900,7 @@ new p5(template(s3params), 'sketch3') // load s1 into sketch1
 let s4params = {
   width: 800,
   height: 560,
-  offsetT: 120,
+  offsetT: 100,
   base: 270,
   interval: 20,
   n_groups: 2,
@@ -989,8 +1008,3 @@ let s4params = {
 }
 
 new p5(template(s4params), 'sketch4') // load s1 into sketch1
-
-document.getElementById('wrapper').oncontextmenu = function(e) {
-    e.preventDefault();
-    return false;
-}

@@ -16,3 +16,8 @@
   font-size: 16px;
   font-style: italic;
 }
+
+img {
+  display: block;
+  margin: auto;
+}
