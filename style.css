@@ -21,3 +21,15 @@ img {
   display: block;
   margin: auto;
 }
+
+.site-title {
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding-left: 1em;
+  border-top: 5px solid #111f11;
+}
+
+.logo {
+  width: 120px;
+}
