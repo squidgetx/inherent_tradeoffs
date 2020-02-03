@@ -1,11 +1,3 @@
-let TEXTSIZE = 16
-let LINESIZE = TEXTSIZE * 1.15
-let NEUTRAL_COLOR = '#AF7DAF'
-let SELECT_COLOR = '#6464C8'
-let UNSELECT_COLOR = '#FA9696'
-let TEXT_COLOR = '#111511'
-let TEXT_COLOR_LIGHT = '#FAFAFA'
-
 // Version 4.0
 // https://stackoverflow.com/questions/5560248/programmatically-lighten-or-darken-a-hex-color-or-rgb-and-blend-colors
 const pSBC=(p,c0,c1,l)=>{
@@ -32,6 +24,19 @@ const pSBC=(p,c0,c1,l)=>{
     if(h)return"rgb"+(f?"a(":"(")+r+","+g+","+b+(f?","+m(a*1000)/1000:"")+")";
     else return"#"+(4294967296+r*16777216+g*65536+b*256+(f?m(a*255):0)).toString(16).slice(1,f?undefined:-2)
 }
+
+let TEXTSIZE = 16
+let TEXTSIZE_SM = 14
+let LINESIZE = TEXTSIZE * 1.15
+let NEUTRAL_COLOR = '#AF7DAF'
+let POSITIVE_COLOR = '#6464C8'
+let NEGATIVE_COLOR = '#FA9696'
+let SELECTED_POSITIVE = pSBC(0.1, POSITIVE_COLOR)
+let UNSELECTED_POSITIVE = pSBC(0.5, POSITIVE_COLOR)
+let SELECTED_NEGATIVE = pSBC(0.1, NEGATIVE_COLOR)
+let UNSELECTED_NEGATIVE = pSBC(0.5, NEGATIVE_COLOR)
+let TEXT_COLOR = '#111511'
+let TEXT_COLOR_LIGHT = '#FAFAFA'
 
 let createButton = function(
   p5, x, y, w, h, text, cb, altText=null
@@ -99,6 +104,10 @@ Array.prototype.shuffle = function() {
 
 function inBox(x, y, boxCenter, boxW, boxH) {
   return (x > boxCenter[0] - boxW && x < boxCenter[0] + boxW && y > boxCenter[1] - boxH && y < boxCenter[1] + boxH)
+}
+
+function inBoxNoCenter(x, y, boxX, boxY, boxW, boxH) {
+  return (x > boxX && x < (boxX + boxW) && y > boxY && y < (boxY + boxH))
 }
 
 function fractionText(str1, str2, x, y, p5) {
@@ -249,10 +258,9 @@ function drawPeople(p5, sketch, table=[], highlightBox = null) {
         p5.push();
         p5.noStroke()
         let person = sketch.people[group_i * sketch.n_per_group + i];
+        let fillFactor = 0.3
         if (person.label) {
-          p5.fill(100, 100, 200);
-        } else {
-          p5.fill(250, 150, 150);
+          fillFactor = 0
         }
         let row = Math.floor(i / sketch.n_cols);
         let col = i % sketch.n_cols;
@@ -260,7 +268,6 @@ function drawPeople(p5, sketch, table=[], highlightBox = null) {
           getCoords(person, sketch)[0],
           getCoords(person, sketch)[1],
         );
-        if (person.show) {
           if (highlightBox != null) {
             if (person.group_id == highlightBox[0] || highlightBox[0] == -1) {
               let tableRow = table[highlightBox[1]]
@@ -290,20 +297,26 @@ function drawPeople(p5, sketch, table=[], highlightBox = null) {
               }
             }
           }
-          if (person.positive) {
-            p5.rotate(Math.PI/4);
-            p5.rect(-r/2, -weight/2, r, weight);
-            p5.rect(-weight/2, -r/2, weight, r);
-          } else {
+
+          p5.fill(pSBC(fillFactor, NEUTRAL_COLOR));
+          if (person.show) {
+            if (person.positive) {
+              p5.fill(pSBC(fillFactor, POSITIVE_COLOR));
+            } else {
+              p5.fill(pSBC(fillFactor, NEGATIVE_COLOR));
+            }
+          }
+          /*
+          p5.rotate(Math.PI/4);
+          p5.rect(-r/2, -weight/2, r, weight);
+          p5.rect(-weight/2, -r/2, weight, r);
             p5.circle(0, 0, r-2);
             p5.push();
             p5.fill(250);
             p5.circle(0, 0, r-2-weight*2);
             p5.pop();
-          }
-        } else {
+            */
           p5.rect(-r/2, -r/2, r, r);
-        }
         p5.pop();
       }
       p5.stroke(10);
@@ -432,7 +445,7 @@ let s0params = {
   }
 }
 
-let drawTable = function(p5, sp, p) {
+let drawTable = function(p5, sp, p, getStatsCB = function(sp) { return getStats(sp.people)}) {
   p5.noStroke()
   p5.fill(70);
   p5.push()
@@ -440,13 +453,14 @@ let drawTable = function(p5, sp, p) {
   p5.textStyle(p5.BOLD)
   p5.text(p.groupNames[0], sp.offsetL, sp.offsetT - 15)
   p5.text(p.groupNames[1], sp.offsetL + sp.group_w , sp.offsetT - 15)
+  p5.textSize(TEXTSIZE_SM)
   for(let i = 0; i < p.table.length; i++) {
     p5.textAlign(p5.RIGHT, p5.CENTER)
     p5.text(p.table[i].label, sp.offsetL - LINESIZE, p.base + p.interval * i + (Math.floor(i / 2) * p.interval * 0.5))
   }
   p5.pop()
 
-  let stats = getStats(sp.people)
+  let stats = getStatsCB(sp)
 
   p5.push()
   p5.textAlign(p5.LEFT, p5.CENTER)
@@ -455,25 +469,35 @@ let drawTable = function(p5, sp, p) {
       let xLeft = sp.offsetL + j * sp.group_w;
       let yCenter = p.base + p.interval * i + (Math.floor(i / 2) * p.interval * 0.5);
       p5.push();
-      p5.fill(pSBC(0.5, p.table[i].fillColor));
+      p5.fill(p.table[i].fillColor);
       if (sp.highlightBox != null) {
         if (sp.highlightBox[0] == j && sp.highlightBox[1] == i) {
           p5.fill(pSBC(0.2, p.table[i].fillColor));
         }
       }
       p5.rectMode(p5.CORNER)
-      p5.rect(
-        xLeft,
-        yCenter  - LINESIZE / 2,
-        p.table[i].getValue(stats, j) / p.n_per_group * (sp.group_w_no_pad),
-        LINESIZE,
-      )
+      np = p.n_per_group
+      if (p.n_per_group > 20) {
+        np = 100
+      }
+      if (p.table[i].drawBar == undefined) {
+        p5.rect(
+          xLeft,
+          yCenter  - LINESIZE / 2,
+          p.table[i].getValue(stats, j) / np * (sp.group_w_no_pad),
+          LINESIZE,
+        )
+      } else {
+        p.table[i].drawBar(p5, stats, j, xLeft, yCenter - LINESIZE / 2, LINESIZE, sp.group_w_no_pad / np)
+      }
       p5.pop();
-      p5.text(
-        p.table[i].getValue(stats, j),
-        xLeft,
-        yCenter,
-      )
+      if (p.n_per_group < 20) {
+        p5.text(
+          p.table[i].getValue(stats, j).toFixed(0),
+          xLeft,
+          yCenter,
+        )
+      }
     }
   }
   for(let i = 0; i < p.table.length; i+=2) {
@@ -658,7 +682,7 @@ let s1params = {
   offsetT: 100,
   interval: 20,
   n_groups: 2,
-  n_per_group: 10,
+  n_per_group: 8,
   actionText: "Show Genders",
   actionAltText: "Hide Genders",
   actionCb: function(sp) {
@@ -683,7 +707,7 @@ let s1params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].tp
       },
-      fillColor: SELECT_COLOR,
+      fillColor: SELECTED_POSITIVE,
     },
     {
       label: "All Interview",
@@ -692,7 +716,15 @@ let s1params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].nLabeled
       },
-      fillColor: SELECT_COLOR,
+      drawBar: function(p5, stats, group_i, x, y, h, w_per_unit) {
+        p5.fill(SELECTED_POSITIVE)
+        let w1 = w_per_unit * stats.groupStats[group_i].tp
+        p5.rect(x, y, w1, h)
+        p5.fill(SELECTED_NEGATIVE)
+        let w2 = w_per_unit * stats.groupStats[group_i].fp
+        p5.rect(x + w1, y, w2, h)
+      },
+      fillColor: POSITIVE_COLOR,
     },
   ],
   nTableInteractRows: 2,
@@ -719,18 +751,17 @@ let s2params = {
   base: 270,
   interval: 20,
   n_groups: 2,
-  n_per_group: 20,
-  actionText: "Show Race",
-  actionAltText: "Hide Race",
+  n_per_group: 8,
+  actionText: "Sort",
+  actionAltText: "Unsort",
   actionCb: function(sp) {
     return function() {
-      sp.unifiedDir = !sp.unifiedDir
+      sp.sortedDir = !sp.sortedDir
     }
   },
   resetCb: function(sp) {
     sp.unified = 0;
     sp.unifiedDir = false;
-    sp.actionButton.isClicked = true;
     sp.people.forEach(function(p) { p.show = true });
     sp.people.forEach(function(p) { p.label = Math.random() < 0.3 });
   },
@@ -744,7 +775,7 @@ let s2params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].tp
       },
-      fillColor: SELECT_COLOR,
+      fillColor: SELECTED_POSITIVE,
     },
     {
       label: "All Approved",
@@ -753,7 +784,15 @@ let s2params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].nLabeled
       },
-      fillColor: SELECT_COLOR,
+      drawBar: function(p5, stats, group_i, x, y, h, w_per_unit) {
+        p5.fill(SELECTED_POSITIVE)
+        let w1 = w_per_unit * stats.groupStats[group_i].tp
+        p5.rect(x, y, w1, h)
+        p5.fill(SELECTED_NEGATIVE)
+        let w2 = w_per_unit * stats.groupStats[group_i].fp
+        p5.rect(x + w1, y, w2, h)
+      },
+      fillColor: POSITIVE_COLOR,
     },
     {
       label: "Rejected and Defaulted",
@@ -762,7 +801,7 @@ let s2params = {
       getValue: function(stats, group_i) {
         return (stats.groupStats[group_i].tn)
       },
-      fillColor: UNSELECT_COLOR,
+      fillColor: UNSELECTED_NEGATIVE,
     },
     {
       label: "All Rejected",
@@ -771,7 +810,15 @@ let s2params = {
       getValue: function(stats, group_i) {
         return (stats.groupStats[group_i].nUnlabeled)
       },
-      fillColor: UNSELECT_COLOR,
+      drawBar: function(p5, stats, group_i, x, y, h, w_per_unit) {
+        p5.fill(UNSELECTED_NEGATIVE)
+        let w1 = w_per_unit * stats.groupStats[group_i].tn
+        p5.rect(x, y, w1, h)
+        p5.fill(UNSELECTED_POSITIVE)
+        let w2 = w_per_unit * stats.groupStats[group_i].fn
+        p5.rect(x + w1, y, w2, h)
+      },
+      fillColor: NEGATIVE_COLOR,
     },
   ],
   tableLeftOffset: 50,
@@ -783,9 +830,7 @@ let s2params = {
     p5.text((stats.accuracy * 100).toFixed(0) + "% of the approved loan applicants went on to pay back their loan", p5.width/2, 45)
     p5.text("and " + (stats.negAccuracy * 100).toFixed(0) + "% of the rejected applicants defaulted on a different loan within one year.", p5.width/2, 45 + LINESIZE)
     p5.pop()
-    if (sp.actionButton.isClicked) {
-      drawTable(p5, sp, this);
-    }
+    drawTable(p5, sp, this);
   }
 }
 
@@ -798,9 +843,9 @@ let s3params = {
   offsetT: 120,
   interval: 20,
   n_groups: 2,
-  n_per_group: 20,
-  actionText: "Sort",
-  actionAltText: "Unsort",
+  n_per_group: 8,
+  actionText: "Unsort",
+  actionAltText: "Sort",
   actionCb: function(sp) {
     return function() {
       sp.sortedDir = !sp.sortedDir
@@ -809,8 +854,8 @@ let s3params = {
   resetCb: function(sp) {
     sp.unified = 0;
     sp.unifiedDir = false;
-    sp.sortedDir = false;
-    sp.sorted = 0;
+    sp.sortedDir = true;
+    sp.sorted = 1;
     sp.people.forEach(function(p) { p.show = true });
     randomSelectProportions(sp)
   },
@@ -824,7 +869,7 @@ let s3params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].fp
       },
-      fillColor: SELECT_COLOR,
+      fillColor: SELECTED_NEGATIVE,
     },
     {
       label: "All No Arrests",
@@ -833,6 +878,15 @@ let s3params = {
       getValue: function(stats, group_i) {
         return stats.groupStats[group_i].nNegative
       },
+      drawBar: function(p5, stats, group_i, x, y, h, w_per_unit) {
+        let w2 = w_per_unit * stats.groupStats[group_i].fp
+        p5.fill(SELECTED_NEGATIVE)
+        p5.rect(x, y, w2, h)
+        p5.fill(UNSELECTED_NEGATIVE)
+        let w1 = w_per_unit * stats.groupStats[group_i].tn
+        p5.rect(x + w2, y, w1, h)
+      },
+      fillColor: NEUTRAL_COLOR,
       fillColor: NEUTRAL_COLOR,
     },
     {
@@ -842,7 +896,7 @@ let s3params = {
       getValue: function(stats, group_i) {
         return (stats.groupStats[group_i].fn)
       },
-      fillColor: UNSELECT_COLOR,
+      fillColor: UNSELECTED_POSITIVE,
     },
     {
       label: "All Arrested",
@@ -850,6 +904,14 @@ let s3params = {
       mode: "nPositive",
       getValue: function(stats, group_i) {
         return (stats.groupStats[group_i].nPositive)
+      },
+      drawBar: function(p5, stats, group_i, x, y, h, w_per_unit) {
+        let w1 = w_per_unit * stats.groupStats[group_i].fn
+        p5.fill(UNSELECTED_POSITIVE)
+        p5.rect(x, y, w1, h)
+        p5.fill(SELECTED_POSITIVE)
+        let w2 = w_per_unit * stats.groupStats[group_i].tp
+        p5.rect(x + w1, y, w2, h)
       },
       fillColor: NEUTRAL_COLOR,
     },
@@ -897,83 +959,100 @@ let randomSelectProportions = function(sp) {
 
 new p5(template(s3params), 'sketch3') // load s1 into sketch1
 
-let s4params = {
+let s5params = {
   width: 800,
-  height: 560,
+  height: 600,
   offsetT: 100,
-  base: 270,
+  base: 350,
   interval: 20,
   n_groups: 2,
-  n_per_group: 20,
-  actionText: "Unsort",
-  actionAltText: "Sort",
-  actionCb: function(sp) {
-    return function() {
-      sp.sortedDir = !sp.sortedDir
-    }
-  },
-  resetCb: function(sp) {
-    sp.unified = 0;
-    sp.unifiedDir = false;
-    sp.sortedDir = true;
-    sp.sorted = 1;
-    sp.people.forEach(function(p) { p.show = true });
-    randomSelectProportions(sp)
-  },
-  title: "A Hiring Example",
+  n_per_group: 30,
+  title: "A Larger Hiring Example",
   groupNames: ["Men", "Women"],
   table: [
     {
-      label: "Interviewed and Qualified",
+      label: "Interviewed & Qualified",
       allowInteract: true,
       mode: "tp",
-      getValue: function(stats, group_i) {
-        return stats.groupStats[group_i].tp
+      getValue: function(sp, group_i) {
+        return sp.base_rates[group_i] * sp.selection_rates[group_i][0] * 100
       },
-      fillColor: SELECT_COLOR,
+      fillColor: pSBC(0.1, POSITIVE_COLOR),
     },
     {
       label: "All Interviewed",
       allowInteract: true,
       mode: "nLabeled",
-      getValue: function(stats, group_i) {
-        return stats.groupStats[group_i].nLabeled
+      getValue: function(sp, group_i) {
+        return ((sp.selection_rates[group_i][1]) * (1-sp.base_rates[group_i]) + (sp.selection_rates[group_i][0]) * sp.base_rates[group_i]) * 100;
       },
-      fillColor: SELECT_COLOR,
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        p5.fill(pSBC(0.1, POSITIVE_COLOR))
+        let w1 = w_per_unit * sp.base_rates[group_i] * sp.selection_rates[group_i][0] * 100;
+        p5.rect(x, y, w1, h)
+        p5.fill(pSBC(0.1, NEGATIVE_COLOR))
+        let w2 = w_per_unit * (1 - sp.base_rates[group_i]) * sp.selection_rates[group_i][1] * 100;
+        p5.rect(x + w1, y, w2, h)
+      },
+      fillColor: POSITIVE_COLOR,
     },
     {
-      label: "Rejected and Unqualified",
+      label: "Rejected & Unqualified",
       allowInteract: true,
       mode: "tn",
-      getValue: function(stats, group_i) {
-        return (stats.groupStats[group_i].tn)
+      getValue: function(sp, group_i) {
+        return (1 - sp.selection_rates[group_i][1]) * (1 - sp.base_rates[group_i]) * 100
       },
-      fillColor: UNSELECT_COLOR,
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        p5.fill(pSBC(0.5, NEGATIVE_COLOR))
+        p5.rect(x, y, w_per_unit * this.getValue(sp, group_i), h)
+      },
+      fillColor: NEGATIVE_COLOR,
     },
     {
       label: "All Rejected",
       allowInteract: true,
       mode: "nUnlabeled",
-      getValue: function(stats, group_i) {
-        return (stats.groupStats[group_i].nUnlabeled)
+      getValue: function(sp, group_i) {
+        return ((1 - sp.selection_rates[group_i][1]) * (1-sp.base_rates[group_i]) + (1 - sp.selection_rates[group_i][0]) * sp.base_rates[group_i]) * 100;
       },
-      fillColor: UNSELECT_COLOR,
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        let w2 = w_per_unit * (1 - sp.base_rates[group_i]) * (1 - sp.selection_rates[group_i][1]) * 100;
+        p5.fill(pSBC(0.5, NEGATIVE_COLOR))
+        p5.rect(x, y, w2, h)
+        p5.fill(pSBC(0.5, POSITIVE_COLOR))
+        let w1 = w_per_unit * (1 - sp.base_rates[group_i]) * (1 - sp.selection_rates[group_i][0]) * 100;
+        p5.rect(x + w2, y, w1, h)
+      },
+      fillColor: NEGATIVE_COLOR,
     },
     {
-      label: "Interviewed and Unqualified",
+      label: "Interviewed & Unqualified",
       allowInteract: true,
       mode: "fp",
-      getValue: function(stats, group_i) {
-        return stats.groupStats[group_i].fp
+      getValue: function(sp, group_i) {
+        return sp.selection_rates[group_i][1] * (1 - sp.base_rates[group_i]) * 100
       },
-      fillColor: SELECT_COLOR,
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        p5.fill(pSBC(0.1, NEGATIVE_COLOR))
+        p5.rect(x, y, w_per_unit * this.getValue(sp, group_i), h)
+      },
+      fillColor: POSITIVE_COLOR,
     },
     {
       label: "All Unqualified",
       allowInteract: true,
       mode: "nNegative",
-      getValue: function(stats, group_i) {
-        return stats.groupStats[group_i].nNegative
+      getValue: function(sp, group_i) {
+        return (1 - sp.base_rates[group_i]) * 100
+      },
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        let w2 = w_per_unit * (1 - sp.base_rates[group_i]) * (sp.selection_rates[group_i][1]) * 100;
+        p5.fill(pSBC(0.1, NEGATIVE_COLOR))
+        p5.rect(x, y, w2, h)
+        p5.fill(pSBC(0.5, NEGATIVE_COLOR))
+        let w1 = w_per_unit * (1 - sp.base_rates[group_i]) * (1 - sp.selection_rates[group_i][1]) * 100;
+        p5.rect(x + w2, y, w1, h)
       },
       fillColor: NEUTRAL_COLOR,
     },
@@ -981,30 +1060,148 @@ let s4params = {
       label: "Rejected and Qualified",
       allowInteract: true,
       mode: "fn",
-      getValue: function(stats, group_i) {
-        return (stats.groupStats[group_i].fn)
+      getValue: function(sp, group_i) {
+        return (1 - sp.selection_rates[group_i][0]) * (sp.base_rates[group_i]) * 100
       },
-      fillColor: UNSELECT_COLOR,
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        p5.fill(pSBC(0.5, POSITIVE_COLOR))
+        p5.rect(x, y, w_per_unit * this.getValue(sp, group_i), h)
+      },
+      fillColor: NEGATIVE_COLOR,
     },
     {
       label: "All Qualified",
       allowInteract: true,
       mode: "nPositive",
-      getValue: function(stats, group_i) {
-        return (stats.groupStats[group_i].nPositive)
+      getValue: function(sp, group_i) {
+        return sp.base_rates[group_i] * 100
+      },
+      drawBar: function(p5, sp, group_i, x, y, h, w_per_unit) {
+        let w1 = w_per_unit * (sp.base_rates[group_i]) * (1 - sp.selection_rates[group_i][0]) * 100;
+        p5.fill(pSBC(0.5, POSITIVE_COLOR))
+        p5.rect(x, y, w1, h)
+        p5.fill(pSBC(0.1, POSITIVE_COLOR))
+        let w2 = w_per_unit * (sp.base_rates[group_i]) * (sp.selection_rates[group_i][0]) * 100;
+        p5.rect(x + w1, y, w2, h)
       },
       fillColor: NEUTRAL_COLOR,
     },
   ],
   tableLeftOffset: 50,
-  drawCb: function(sp, p5) {
-    p5.push()
-    p5.noStroke()
-    p5.fill(70)
-    p5.pop()
+}
 
-    drawTable(p5, sp, this);
+//new p5(template(s4params), 'sketch4') // load s1 into sketch1
+
+let s5 = function(p) {
+  return function(p5) {
+    let sp;
+    let drag;
+
+    let reset = function() {
+      let init_group_rates = generateGroupRates(p.n_groups)
+      sp = getSketchParams([], [], p.n_groups, p.n_per_group, p.offsetT, p5);
+      sp.base_rates = init_group_rates;
+      sp.selection_rates = [];
+      for(let i = 0; i < p.n_groups; i++) {
+        sp.selection_rates[i] = [
+          Math.random(),
+          Math.random(),
+        ]
+      }
+      sp.resetButton = createButton(p5, p5.width/2, p.height - TEXTSIZE * 2, 140, TEXTSIZE * 1.5, "Reset", reset);
+    }
+
+    p5.setup = function() {
+      p5.createCanvas(p.width,p.height)
+      reset(sp);
+    }
+
+    let r = function(x, y, w, h) {
+      for(let i = 0; i < w; i+=4) {
+        p5.rect(x + i, y, 2, h);
+      }
+    }
+
+    p5.draw = function() {
+      p5.background(250);
+      p5.textSize(TEXTSIZE)
+
+      // drawTitle
+      p5.push();
+      p5.fill(10)
+      p5.stroke(10)
+      p5.textAlign(p5.CENTER)
+      p5.text(p.title, p5.width/2, 25)
+      p5.fill(TEXT_COLOR)
+      p5.noStroke()
+      p5.text("Click and drag to adjust the relative sizes of each group.", p5.width/2, 45)
+      p5.pop()
+
+      // draw squares...
+      p5.push();
+      for(let group_i = 0; group_i < p.n_groups; group_i++) {
+        let x = sp.offsetL + group_i * sp.group_w;
+        let y = sp.offsetT;
+        let vOffset = sp.group_w_no_pad * sp.base_rates[group_i]
+        let hOffset1 = sp.group_w_no_pad * sp.selection_rates[group_i][0]
+        let hOffset2 = sp.group_w_no_pad * sp.selection_rates[group_i][1]
+        p5.noStroke()
+        p5.fill(pSBC(0, POSITIVE_COLOR))
+        p5.rect(x, y, hOffset1, vOffset)
+        p5.fill(pSBC(0.5, POSITIVE_COLOR))
+        p5.rect(x + hOffset1, y, sp.group_w_no_pad - hOffset1, vOffset)
+        p5.fill(pSBC(0.1, NEGATIVE_COLOR))
+        p5.rect(x, y + vOffset, hOffset2, sp.group_w_no_pad - vOffset)
+        p5.fill(pSBC(0.5, NEGATIVE_COLOR))
+        p5.rect(x + hOffset2, y + vOffset, sp.group_w_no_pad - hOffset2, sp.group_w_no_pad - vOffset)
+
+      }
+      p5.pop();
+
+      drawTable(p5, sp, p, function(sp) {
+        return sp;
+      })
+
+      if (drag) {
+        for(let group_i = 0; group_i < p.n_groups; group_i++) {
+          let x = sp.offsetL + group_i * sp.group_w;
+          let y = sp.offsetT;
+          let vOffset = sp.group_w_no_pad * sp.base_rates[group_i]
+          let hOffset1 = sp.group_w_no_pad * sp.selection_rates[group_i][0]
+          let hOffset2 = sp.group_w_no_pad * sp.selection_rates[group_i][1]
+          if (inBoxNoCenter(p5.mouseX, p5.mouseY, x, y, sp.group_w_no_pad, vOffset)) {
+            sp.selection_rates[group_i][0] = (p5.mouseX - x) / sp.group_w_no_pad
+          } else if (inBoxNoCenter(p5.mouseX, p5.mouseY, x, y + vOffset, sp.group_w_no_pad, sp.group_w_no_pad - vOffset)) {
+            sp.selection_rates[group_i][1] = (p5.mouseX - x) / sp.group_w_no_pad
+          } else {
+          }
+        }
+      }
+
+      sp.resetButton.draw();
+    }
+
+    p5.mousePressed = function() {
+      drag = true;
+      // prevent clicks from highlighting text on the page
+      if (p5.mouseX > 0 && p5.mouseX < p5.width) {
+        if (p5.mouseY > 0 && p5.mouseY < p5.height) {
+          return false;
+        }
+      }
+    }
+
+    p5.mouseReleased = function() {
+      drag = false;
+      sp.resetButton.checkClicked();
+      return false;
+    }
+
+    p5.mouseMoved = function() {
+      sp.resetButton.checkHover();
+
+    }
   }
 }
 
-new p5(template(s4params), 'sketch4') // load s1 into sketch1
+new p5(s5(s5params), 'sketch4') // load s1 into sketch1
